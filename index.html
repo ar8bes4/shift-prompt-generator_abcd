@@ -1,14 +1,139 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/shift-prompt-generator_abcd/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>shift-prompt-generator</title>
-    <script type="module" crossorigin src="/shift-prompt-generator_abcd/assets/index-j6Qbm2V1.js"></script>
-    <link rel="stylesheet" crossorigin href="/shift-prompt-generator_abcd/assets/index-DSQcx8kQ.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>当直シフト プロンプトジェネレーター (自動匿名化・アノニマイズ対応版)</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+
+  <header>
+    <h1>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #60a5fa;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      当直シフト プロンプトジェネレーター
+    </h1>
+    <span class="status-badge">アノニマイズ (匿名化) モード</span>
+  </header>
+
+  <main>
+    <!-- 左カラム：設定と入力 -->
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      
+      <!-- 期間設定カード -->
+      <div class="card">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          対象期間の設定
+        </div>
+        <div class="date-inputs">
+          <div class="form-group">
+            <label for="yearSelect">年</label>
+            <select id="yearSelect"></select>
+          </div>
+          <div class="form-group">
+            <label for="monthSelect">月</label>
+            <select id="monthSelect">
+              <option value="1">1月</option>
+              <option value="2">2月</option>
+              <option value="3">3月</option>
+              <option value="4">4月</option>
+              <option value="5">5月</option>
+              <option value="6">6月</option>
+              <option value="7">7月</option>
+              <option value="8">8月</option>
+              <option value="9">9月</option>
+              <option value="10">10月</option>
+              <option value="11">11月</option>
+              <option value="12">12月</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="customPeriodInput">任意の期間指定 (優先)</label>
+            <input type="text" id="customPeriodInput" placeholder="例: 2026年GW期間">
+          </div>
+        </div>
+      </div>
+
+      <!-- メンバー＆希望シフトカード -->
+      <div class="card">
+        <div class="card-title" style="justify-content: space-between; width: 100%;">
+          <span style="display: flex; align-items: center; gap: 0.5rem;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            当番医師・スケジュール希望の入力
+          </span>
+          <button id="addDoctorBtn" class="btn btn-primary btn-small">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            医師を追加
+          </button>
+        </div>
+        <div id="doctorList" class="doctor-list">
+          <!-- JSで動的に追加されます -->
+        </div>
+      </div>
+
+      <!-- 匿名化マッピング対照表 -->
+      <div class="card">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          アノニマイズ対応表 (実名はブラウザ内でのみ保持)
+        </div>
+        <div style="max-height: 200px; overflow-y: auto;">
+          <table class="mapping-table">
+            <thead>
+              <tr>
+                <th style="width: 40%;">匿名記号 (プロンプト出力)</th>
+                <th style="width: 60%;">登録実名</th>
+              </tr>
+            </thead>
+            <tbody id="mappingBody">
+              <!-- JSで動的に追加されます -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 逆変換デコーダー -->
+      <div class="card">
+        <div class="card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 22v-6h6M21 13a9 9 0 1 1-9-9"/></svg>
+          逆変換 (デコード) ツール
+        </div>
+        <div class="decode-container">
+          <label for="decodeInput">AIが生成したシフト表 (匿名表記) をここに貼り付けてください:</label>
+          <textarea id="decodeInput" rows="3" placeholder="例: 5/10 当直: Aさん, 2nd: Bさん..."></textarea>
+          <button id="decodeBtn" class="btn btn-primary" style="align-self: flex-end;">
+            実名にデコードする
+          </button>
+          <label>実名復元結果:</label>
+          <div id="decodeOutput" class="decode-output">変換後のテキストがここに表示されます</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 右カラム：プロンプト生成結果 -->
+    <div class="card prompt-container">
+      <div class="card-title" style="justify-content: space-between;">
+        <span style="display: flex; align-items: center; gap: 0.5rem;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          生成された AI プロンプト (匿名化済)
+        </span>
+        <button id="copyBtn" class="btn btn-primary btn-small">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          コピーする
+        </button>
+      </div>
+      <textarea id="promptOutput" class="prompt-textarea" readonly></textarea>
+      <div id="copyBadge" class="copy-badge">コピーしました！</div>
+    </div>
+  </main>
+
+  <footer>
+    <p>Client-Side Anonymizer &copy; 2026 Shift Planner. 全ての個人情報はブラウザのメモリ内でのみ処理されます。</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
 </html>
