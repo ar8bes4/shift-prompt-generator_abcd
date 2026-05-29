@@ -271,14 +271,35 @@ function updatePrompt(shouldUpdateMappings = true) {
     }
   }).join('\n');
 
-  // ルールの匿名化
+  // ルールの匿名化（プロンプト用）
   let anonymizedRules = rules.trim();
   if (anonymizedRules) {
     anonymizedRules = anonymizeText(anonymizedRules, activeDoctors);
   }
 
-  // 画面上のルールプレビューエリアにも匿名化済のルールを表示
-  rulesInput.value = anonymizedRules;
+  // ルールの実名プレビュー（画面表示用、匿名化前）
+  let previewRules = rules.trim();
+  if (previewRules) {
+    const originalNames = ['大野', '服部', '新村', '泉'];
+    const replacePairs = [];
+    
+    // 初期の医師名から現在の実名（doctors[idx].name）への置換ペアを作成
+    originalNames.forEach((origName, idx) => {
+      if (doctors[idx] && doctors[idx].name.trim()) {
+        replacePairs.push({ target: origName, replacement: doctors[idx].name.trim() });
+      }
+    });
+
+    // 競合防止のためターゲットの長い順にソートして置換
+    replacePairs.sort((a, b) => b.target.length - a.target.length);
+    replacePairs.forEach(pair => {
+      const regex = new RegExp(escapeRegExp(pair.target), 'g');
+      previewRules = previewRules.replace(regex, pair.replacement);
+    });
+  }
+
+  // 画面上のルールプレビューエリアには実名版（匿名化前）を表示
+  rulesInput.value = previewRules;
 
   // 基本テンプレート（通常版と統一したプロンプト構成）
   let template = `あなたは医療現場の高度なシフト作成を支援する専門AIアシスタントです。
