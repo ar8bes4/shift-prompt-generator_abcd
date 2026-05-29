@@ -1,13 +1,36 @@
 // 医師の初期データ
 const defaultDoctors = [
-  { name: '大野', request: '5/10 不可\n5/20-5/22 休み希望' },
-  { name: '服部', request: '土日休日は休み希望\n5/15 不可' },
-  { name: '新村', request: '5/3 夜勤不可\n5/4 休み希望' },
-  { name: '泉', request: '5/24 不可' }
+  { name: '大野', request: '5/10 不可\n5/20-5/22 休み希望', symbol: 'Aさん' },
+  { name: '服部', request: '土日休日は休み希望\n5/15 不可', symbol: 'Bさん' },
+  { name: '新村', request: '5/3 夜勤不可\n5/4 休み希望', symbol: 'Cさん' },
+  { name: '泉', request: '5/24 不可', symbol: 'Dさん' }
 ];
 
 // 状態管理
 let doctors = JSON.parse(localStorage.getItem('shift_doctors')) || defaultDoctors;
+
+// doctors の各要素に symbol がない場合は自動で割り当てる
+const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+doctors.forEach((doc, index) => {
+  if (!doc.symbol) {
+    doc.symbol = alphabet[index % 26] + 'さん';
+  }
+});
+
+const defaultRules = `平日
+- 担当医師: 服部、新村、大野の3名
+- 割合の目安: 服部 (全体の2/5), 大野 (全体の2/5), 新村 (全体の1/5)
+- ICU当直: その日に電話待機を「兼任」する。前日および翌日に電話待機を割り当てても【よい】。
+- 外科当直: その日に電話待機を「兼任」する。前日および翌日には電話待機を割り当てては【いけない】
+
+土日休日
+- 担当医師: 服部、大野、新村、泉の4名
+- 割合の目安: 4名で概ね均等
+- ICU当直/日直: 割当日は電話待機を【必ず兼任】する。前日および翌日に割り当てても【よい】。
+- 外科当直/日直: 割当日は電話待機を【必ず兼任】する。前日および翌日には割り当てては【いけない】。
+- 連続アサイン: 土日などの連続した休日は、できる限り「同一人物が連続して担当」するように配置すること。泉は必ず連続させる`;
+
+let rules = localStorage.getItem('shift_rules') || defaultRules;
 let year = new Date().getFullYear();
 let month = 5;
 let customPeriod = '';
@@ -16,6 +39,7 @@ let doctorMappings = {}; // 実名 -> 匿名記号
 // DOM要素
 const doctorListContainer = document.getElementById('doctorList');
 const addDoctorBtn = document.getElementById('addDoctorBtn');
+const rulesInput = document.getElementById('rulesInput');
 const yearSelect = document.getElementById('yearSelect');
 const monthSelect = document.getElementById('monthSelect');
 const customPeriodInput = document.getElementById('customPeriodInput');
@@ -42,8 +66,16 @@ function init() {
 
   monthSelect.value = month;
 
+  // ルールの初期化
+  rulesInput.value = rules;
+
   // イベントリスナーの登録
   addDoctorBtn.addEventListener('click', addDoctorRow);
+  rulesInput.addEventListener('input', (e) => {
+    rules = e.target.value;
+    localStorage.setItem('shift_rules', rules);
+    updatePrompt(false); // マッピング表は再描画せず、プロンプトテキストのみ更新（フォーカス維持のため）
+  });
   yearSelect.addEventListener('change', (e) => { year = parseInt(e.target.value); updatePrompt(); });
   monthSelect.addEventListener('change', (e) => { month = parseInt(e.target.value); updatePrompt(); });
   customPeriodInput.addEventListener('input', (e) => { customPeriod = e.target.value; updatePrompt(); });
@@ -85,20 +117,19 @@ function createDoctorRow(name, request, index) {
     doctors[index].name = e.target.value;
     saveToLocalStorage();
     updateMappings();
-    updatePrompt();
+    updatePrompt(false); // 入力フォーカス維持のためマッピング表は再描画しない
   });
 
   requestInput.addEventListener('input', (e) => {
     doctors[index].request = e.target.value;
     saveToLocalStorage();
-    updatePrompt();
+    updatePrompt(false);
   });
 
   deleteBtn.addEventListener('click', () => {
     doctors.splice(index, 1);
     renderDoctors();
-    updateMappings();
-    updatePrompt();
+    updatePrompt(true);
   });
 
   doctorListContainer.appendChild(row);
@@ -106,10 +137,11 @@ function createDoctorRow(name, request, index) {
 
 // 医師行の追加
 function addDoctorRow() {
-  doctors.push({ name: '', request: '' });
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const nextSymbol = alphabet[doctors.length % 26] + 'さん';
+  doctors.push({ name: '', request: '', symbol: nextSymbol });
   renderDoctors();
-  updateMappings();
-  updatePrompt();
+  updatePrompt(true);
 }
 
 // 匿名化マッピングの更新
@@ -118,19 +150,55 @@ function updateMappings() {
   doctorMappings = {};
   mappingBody.innerHTML = '';
 
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
   activeDoctors.forEach((doc, index) => {
-    // Aさん, Bさん, Cさん の形式で匿名記号を割り当てる
-    const symbol = alphabet[index % 26] + 'さん';
-    doctorMappings[doc.name.trim()] = symbol;
+    doctorMappings[doc.name.trim()] = doc.symbol;
 
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td style="font-weight: 500; color: #a7f3d0;">${symbol}</td>
-      <td style="color: var(--text-muted);">${doc.name.trim()}</td>
+      <td style="padding: 4px;">
+        <input type="text" class="mapping-symbol-input" data-index="${doctors.indexOf(doc)}" value="${doc.symbol}" style="width: 100%; background: var(--bg-dark); color: #a7f3d0; border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; font-family: inherit;">
+      </td>
+      <td style="padding: 4px;">
+        <input type="text" class="mapping-name-input" data-index="${doctors.indexOf(doc)}" value="${doc.name.trim()}" style="width: 100%; background: var(--bg-dark); color: var(--text-light); border: 1px solid var(--border-color); border-radius: 4px; padding: 4px; font-family: inherit;">
+      </td>
     `;
     mappingBody.appendChild(tr);
+  });
+
+  // マッピング編集時のイベントリスナー登録
+  mappingBody.querySelectorAll('.mapping-symbol-input').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index);
+      doctors[idx].symbol = e.target.value;
+      saveToLocalStorage();
+      
+      // マッピングオブジェクトを更新し、プロンプトを再生成（マッピング表は再描画しない）
+      doctorMappings[doctors[idx].name.trim()] = e.target.value;
+      updatePrompt(false);
+    });
+  });
+
+  mappingBody.querySelectorAll('.mapping-name-input').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.index);
+      const oldName = doctors[idx].name;
+      const newName = e.target.value;
+      
+      doctors[idx].name = newName;
+      saveToLocalStorage();
+
+      // 左側の医師リストの入力欄も同期
+      const docItems = doctorListContainer.querySelectorAll('.doctor-item');
+      if (docItems[idx]) {
+        docItems[idx].querySelector('.doc-name').value = newName;
+      }
+
+      // マッピングオブジェクトを更新
+      delete doctorMappings[oldName.trim()];
+      doctorMappings[newName.trim()] = doctors[idx].symbol;
+      
+      updatePrompt(false);
+    });
   });
 
   if (activeDoctors.length === 0) {
@@ -149,21 +217,24 @@ function escapeRegExp(string) {
 }
 
 // プロンプトの生成
-function updatePrompt() {
+function updatePrompt(shouldUpdateMappings = true) {
+  if (shouldUpdateMappings) {
+    updateMappings();
+  }
   const activeDoctors = doctors.filter(doc => doc.name.trim() !== '');
-  updateMappings();
-
   const periodText = customPeriod.trim() !== '' ? customPeriod.trim() : `${year}年${month}月`;
 
   // 匿名化された医師リストの生成
   const anonymizedDocsList = activeDoctors.map((doc, idx) => {
-    const symbol = doctorMappings[doc.name.trim()] || `医師${idx + 1}`;
+    const symbol = doc.symbol || `医師${idx + 1}`;
     
     // スケジュール制約のテキストもアノニマイズ
     let requestText = doc.request.trim();
     if (requestText) {
-      activeDoctors.forEach(d => {
-        const s = doctorMappings[d.name.trim()];
+      // 競合防止のため、実名の長い順に置換
+      const sortedDocs = [...activeDoctors].sort((a, b) => b.name.length - a.name.length);
+      sortedDocs.forEach(d => {
+        const s = d.symbol || d.name;
         const regex = new RegExp(escapeRegExp(d.name.trim()), 'g');
         requestText = requestText.replace(regex, s);
       });
@@ -174,50 +245,51 @@ function updatePrompt() {
     }
   }).join('\n');
 
-  // 担当者名の置換用リスト（プロンプト中のテンプレート置換用）
-  const symbolA = doctorMappings['大野'] || '担当者Aさん';
-  const symbolB = doctorMappings['服部'] || '担当者Bさん';
-  const symbolC = doctorMappings['新村'] || '担当者Cさん';
-  const symbolD = doctorMappings['泉'] || '担当者Dさん';
+  // ルールの匿名化
+  let anonymizedRules = rules.trim();
+  if (anonymizedRules) {
+    const sortedDocs = [...activeDoctors].sort((a, b) => b.name.length - a.name.length);
+    sortedDocs.forEach(d => {
+      const symbol = d.symbol || d.name;
+      const regex = new RegExp(escapeRegExp(d.name.trim()), 'g');
+      anonymizedRules = anonymizedRules.replace(regex, symbol);
+    });
+  }
 
-  // 基本テンプレート
+  // 基本テンプレート（通常版と統一したプロンプト構成）
   let template = `あなたは医療現場の高度なシフト作成を支援する専門AIアシスタントです。
-以下の制約条件とスタッフの希望に基づき、最適な当番表（シフト表）を作成してください。
+複雑な制約条件と医師の希望を完全に遵守し、公平でミスのない当番表を作成します。
 
-### 【作成対象】
-* 対象期間: ${periodText}
-* 役割の種類:
-  - 当直 (夜間の緊急対応、主担当)
-  - 日直 (日中の休日対応)
-  - 備考 (待機、その他の支援業務)
-
-### 【当番メンバー（アノニマイズ済）】
+【各医師のスケジュール制約・希望】
 ${anonymizedDocsList}
 
-### 【全体ルールおよび制約条件】
-1. 当番の均等割り当て:
-   - 全体の「当直」および「日直」の割り当て回数が、可能な限りメンバー間で均等になるように配分してください。
-2. 連続勤務の禁止:
-   - 「当直」の翌日に「当直」または「日直」を割り当てることは禁止します（翌日は原則明け）。
-3. 休日の特別ルール:
-   - 土曜日・日曜日・祝日の「日直」と「当直」は、セットでアサインするか、別々にアサインするかを希望リストに沿って決定してください。
+ルール：
+${anonymizedRules}
 
-### 【標準的なシフトパターン例（参考）】
-* 平日当番:
-  - 担当医師: ${symbolB}、${symbolC}、${symbolA} の3名
-  - 割合の目安: ${symbolB} (全体の2/5), ${symbolA} (全体の2/5), ${symbolC} (全体の1/5)
-* 土日休日当番:
-  - 担当医師: ${symbolB}、${symbolA}、${symbolC}、${symbolD} の4名
-  - 割合の目安: 4名で概ね均等
-  - 連続アサイン: 土日などの連続した休日は、できる限り「同一人物が連続して担当」するように配置すること。${symbolD}は必ず連続させる。
+指示：
+${periodText}の電話待機当番表を作製して
 
-### 【出力フォーマット】
-以下の構成で出力してください。
-1. **月間カレンダー形式のシフト一覧** (日付、曜日、当直、日直、備考)
-2. **各メンバーの合計担当回数集計表** (当直、日直のそれぞれの合計)
-3. **制約条件がどのように遵守されたかの簡単な説明**
+step1
+確定業務と波及制約を整理する
+全制約マトリクス（NGまとめ）を整理する
 
-プロンプトは以上です。最適なシフトを作成してください。`;
+step2
+平日の電話待機当番作製
+
+step3
+休日の電話待機当番作製
+
+step4
+検証と微調整
+
+<output_format>
+出力は必ずMarkdown形式で行うこと。
+以下の構成で出力してください：
+1. ${periodText}全体の電話待機当番表（Markdownテーブル形式：日付、曜日、担当者、付記）。外科当直やICU当直が割り振られている場合はその旨を付記
+2. 各個人の担当日数【平日】【土日祝日】【合計】
+3. 全制約マトリクス（NGまとめ）
+4. 留意事項・コンフリクトの有無についての説明
+</output_format>`;
 
   promptOutput.value = template;
 }
