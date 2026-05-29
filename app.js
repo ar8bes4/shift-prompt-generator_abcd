@@ -30,7 +30,7 @@ const defaultRules = `平日
 - 外科当直/日直: 割当日は電話待機を【必ず兼任】する。前日および翌日には割り当てては【いけない】。
 - 連続アサイン: 土日などの連続した休日は、できる限り「同一人物が連続して担当」するように配置すること。泉は必ず連続させる`;
 
-let rules = localStorage.getItem('shift_rules') || defaultRules;
+let rules = defaultRules; // 常にデフォルトルールを使用
 let year = new Date().getFullYear();
 let month = 5;
 let customPeriod = '';
@@ -66,16 +66,8 @@ function init() {
 
   monthSelect.value = month;
 
-  // ルールの初期化
-  rulesInput.value = rules;
-
   // イベントリスナーの登録
   addDoctorBtn.addEventListener('click', addDoctorRow);
-  rulesInput.addEventListener('input', (e) => {
-    rules = e.target.value;
-    localStorage.setItem('shift_rules', rules);
-    updatePrompt(false); // マッピング表は再描画せず、プロンプトテキストのみ更新（フォーカス維持のため）
-  });
   yearSelect.addEventListener('change', (e) => { year = parseInt(e.target.value); updatePrompt(); });
   monthSelect.addEventListener('change', (e) => { month = parseInt(e.target.value); updatePrompt(); });
   customPeriodInput.addEventListener('input', (e) => { customPeriod = e.target.value; updatePrompt(); });
@@ -284,6 +276,9 @@ function updatePrompt(shouldUpdateMappings = true) {
   if (anonymizedRules) {
     anonymizedRules = anonymizeText(anonymizedRules, activeDoctors);
   }
+
+  // 画面上のルールプレビューエリアにも匿名化済のルールを表示
+  rulesInput.value = anonymizedRules;
 
   // 基本テンプレート（通常版と統一したプロンプト構成）
   let template = `あなたは医療現場の高度なシフト作成を支援する専門AIアシスタントです。
