@@ -216,6 +216,46 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// テキストをアノニマイズ（匿名化）する共通関数
+function anonymizeText(text, activeDoctors) {
+  let result = text;
+  const originalNames = ['大野', '服部', '新村', '泉'];
+  const replacePairs = [];
+  
+  // 現在登録されている医師名とシンボルのペアを追加
+  activeDoctors.forEach((doc) => {
+    if (doc.name.trim()) {
+      replacePairs.push({ target: doc.name.trim(), symbol: doc.symbol });
+    }
+  });
+  
+  // 初期の医師名とシンボルのペアも追加（インデックスで連動）
+  originalNames.forEach((origName, idx) => {
+    if (doctors[idx] && doctors[idx].symbol) {
+      replacePairs.push({ target: origName, symbol: doctors[idx].symbol });
+    }
+  });
+  
+  // 重複を排除し、文字数の長い順にソート（置換の競合を防ぐため）
+  const uniquePairs = [];
+  const seen = new Set();
+  replacePairs.forEach(p => {
+    if (!seen.has(p.target)) {
+      seen.add(p.target);
+      uniquePairs.push(p);
+    }
+  });
+  uniquePairs.sort((a, b) => b.target.length - a.target.length);
+  
+  // 置換の実行
+  uniquePairs.forEach(pair => {
+    const regex = new RegExp(escapeRegExp(pair.target), 'g');
+    result = result.replace(regex, pair.symbol);
+  });
+  
+  return result;
+}
+
 // プロンプトの生成
 function updatePrompt(shouldUpdateMappings = true) {
   if (shouldUpdateMappings) {
@@ -231,13 +271,7 @@ function updatePrompt(shouldUpdateMappings = true) {
     // スケジュール制約のテキストもアノニマイズ
     let requestText = doc.request.trim();
     if (requestText) {
-      // 競合防止のため、実名の長い順に置換
-      const sortedDocs = [...activeDoctors].sort((a, b) => b.name.length - a.name.length);
-      sortedDocs.forEach(d => {
-        const s = d.symbol || d.name;
-        const regex = new RegExp(escapeRegExp(d.name.trim()), 'g');
-        requestText = requestText.replace(regex, s);
-      });
+      requestText = anonymizeText(requestText, activeDoctors);
       const bulletedRequest = requestText.split('\n').map(line => `   - ${line.trim()}`).join('\n');
       return `${idx + 1}. ${symbol}:\n${bulletedRequest}`;
     } else {
@@ -248,12 +282,7 @@ function updatePrompt(shouldUpdateMappings = true) {
   // ルールの匿名化
   let anonymizedRules = rules.trim();
   if (anonymizedRules) {
-    const sortedDocs = [...activeDoctors].sort((a, b) => b.name.length - a.name.length);
-    sortedDocs.forEach(d => {
-      const symbol = d.symbol || d.name;
-      const regex = new RegExp(escapeRegExp(d.name.trim()), 'g');
-      anonymizedRules = anonymizedRules.replace(regex, symbol);
-    });
+    anonymizedRules = anonymizeText(anonymizedRules, activeDoctors);
   }
 
   // 基本テンプレート（通常版と統一したプロンプト構成）
